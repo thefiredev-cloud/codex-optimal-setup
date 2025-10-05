@@ -1,0 +1,68 @@
+#!/bin/bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: codex-post-edit [--commit|-c] [file]
+
+Runs Codex diagnostics on a file (or first changed file), then prints a
+suggested commit. With --commit, it stages and commits automatically.
+
+Examples:
+  codex-post-edit src/index.ts
+  codex-post-edit --commit src/index.ts
+  codex-post-edit          # uses first file from `git status`
+EOF
+}
+
+AUTO_COMMIT=0
+FILE_ARG=""
+
+while (( "$#" )); do
+  case "${1:-}" in
+    -h|--help)
+      show_help; exit 0;;
+    -c|--commit)
+      AUTO_COMMIT=1; shift;;
+    --)
+      shift; break;;
+    -*)
+      echo "Unknown option: $1" >&2; exit 2;;
+    *)
+      FILE_ARG="$1"; shift;;
+  esac
+done
+
+CWD="$(pwd)"
+
+# Determine target file if not provided
+TARGET_FILE="${FILE_ARG}"
+if [ -z "$TARGET_FILE" ]; then
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    TARGET_FILE=$(git status --porcelain | awk 'NR==1{print substr($0,4)}') || true
+  fi
+fi
+
+# Run diagnostics if we have a file; otherwise, skip diagnostics
+if [ -n "$TARGET_FILE" ]; then
+  PAYLOAD=$(printf '{"tool_input":{"file_path":"%s"},"cwd":"%s"}' "$TARGET_FILE" "$CWD")
+  echo "$PAYLOAD" | node "$HOME/.codex/hooks/ide_diagnostics.js" || STATUS=$?
+  STATUS=${STATUS:-0}
+  if [ $STATUS -eq 2 ]; then
+    echo "Diagnostics found issues; fix them before committing." >&2
+    exit 2
+  elif [ $STATUS -ne 0 ]; then
+    echo "Diagnostics failed; skipping commit suggestion." >&2
+    exit $STATUS
+  fi
+else
+  echo "No file specified and no changes detected; skipping diagnostics." >&2
+fi
+
+# Commit suggestion or auto-commit
+if [ "$AUTO_COMMIT" = "1" ]; then
+  CODEX_AUTO_COMMIT=1 printf '{"tool_input":{},"cwd":"%s"}' "$CWD" | node "$HOME/.codex/hooks/git_commit.js"
+else
+  CODEX_AUTO_COMMIT=0 printf '{"tool_input":{},"cwd":"%s"}' "$CWD" | node "$HOME/.codex/hooks/git_commit.js"
+fi
+
