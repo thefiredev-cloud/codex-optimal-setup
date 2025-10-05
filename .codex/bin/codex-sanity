@@ -1,0 +1,70 @@
+#!/bin/bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: codex-sanity [--commit|-c] [--mode MODE] [--transcript PATH] [file]
+
+Runs a quick sanity pass: prints session context, renders statusline, then
+runs post-edit diagnostics on the specified file or first changed file.
+
+Options:
+  -c, --commit         Stage and commit after diagnostics pass
+      --mode MODE      startup|resume|clear|compact (default: startup)
+      --transcript P   Path to transcript JSONL for token/cost aggregation
+
+Examples:
+  codex-sanity
+  codex-sanity --commit
+  codex-sanity --mode resume --transcript ~/.claude/transcript.jsonl
+  codex-sanity src/index.ts
+EOF
+}
+
+AUTO_COMMIT=0
+MODE="startup"
+TRANSCRIPT=""
+FILE_ARG=""
+
+while (( "$#" )); do
+  case "${1:-}" in
+    -h|--help) show_help; exit 0;;
+    -c|--commit) AUTO_COMMIT=1; shift;;
+    --mode) MODE="${2:-startup}"; shift 2;;
+    --transcript) TRANSCRIPT="${2:-}"; shift 2;;
+    --) shift; break;;
+    -*) echo "Unknown option: $1" >&2; exit 2;;
+    *) FILE_ARG="$1"; shift;;
+  esac
+done
+
+# 1) Session context
+echo "== Session Context (${MODE}) =="
+printf '{"source":"%s"}' "$MODE" | bash "$HOME/.codex/hooks/session-start.sh" || true
+echo
+
+# 2) Statusline render
+echo "== Status =="
+if [ -n "$TRANSCRIPT" ]; then
+  "$HOME/.codex/bin/codex-status" --transcript "$TRANSCRIPT" || true
+else
+  "$HOME/.codex/bin/codex-status" || true
+fi
+echo
+
+# 3) Post-edit diagnostics + suggested commit (or auto-commit)
+echo "== Post-Edit Diagnostics =="
+if [ -n "$FILE_ARG" ]; then
+  if [ "$AUTO_COMMIT" = "1" ]; then
+    "$HOME/.codex/bin/codex-post-edit" --commit "$FILE_ARG"
+  else
+    "$HOME/.codex/bin/codex-post-edit" "$FILE_ARG"
+  fi
+else
+  if [ "$AUTO_COMMIT" = "1" ]; then
+    "$HOME/.codex/bin/codex-post-edit" --commit
+  else
+    "$HOME/.codex/bin/codex-post-edit"
+  fi
+fi
+
