@@ -1,0 +1,9 @@
+# Exclude sensitive Codex files
+.codex/auth.json
+.codex/config.toml
+.codex/history.jsonl
+.codex/log/
+.codex/sessions/
+# macOS and editor junk
+.DS_Store
+*.swp
