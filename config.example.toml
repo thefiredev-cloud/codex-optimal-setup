@@ -1,0 +1,64 @@
+# Example Codex config (no secrets)
+model = "gpt-5"
+model_reasoning_effort = "high"
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "mcp-remote@latest", "https://mcp.context7.com/mcp"]
+
+[mcp_servers.stripe]
+command = "npx"
+# Prefer env var STRIPE_API_KEY; if you must pass via args, replace YOUR_STRIPE_KEY
+args = ["-y", "@stripe/mcp", "--tools=all", "--mode=all", "--api-key", "YOUR_STRIPE_KEY"]
+
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "YOUR_GITHUB_PAT" }
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]
+
+[mcp_servers.browserbase]
+command = "npx"
+args = ["@browserbasehq/mcp-server-browserbase"]
+env = { BROWSERBASE_API_KEY = "YOUR_BROWSERBASE_API_KEY", BROWSERBASE_PROJECT_ID = "YOUR_BROWSERBASE_PROJECT_ID" }
+
+[mcp_servers.railway]
+command = "npx"
+args = ["-y", "@railway/mcp-server"]
+env = { RAILWAY_API_KEY = "YOUR_RAILWAY_API_KEY" }
+
+[mcp_servers.supabase]
+command = "npx"
+args = ["-y", "@supabase/mcp-server-supabase@latest", "--project-ref=YOUR_SUPABASE_PROJECT_REF"]
+env = { SUPABASE_ACCESS_TOKEN = "YOUR_SUPABASE_ACCESS_TOKEN" }
+
+[mcp_servers.sentry]
+command = "npx"
+args = ["-y", "mcp-remote@latest", "https://mcp.sentry.dev/mcp"]
+
+[mcp_servers.memory]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-memory"]
+# Adjust storage dir to your environment
+env = { CONTEXT_MCP_STORAGE_DIR = "~/.cursor/memory" }
+
+[mcp_servers.hyperbrowser]
+command = "npx"
+args = ["-y", "hyperbrowser-mcp"]
+env = { HYPERBROWSER_API_KEY = "YOUR_HYPERBROWSER_API_KEY" }
+
+[mcp_servers.netlify]
+command = "npx"
+args = ["-y", "@netlify/mcp"]
+env = { NETLIFY_PERSONAL_ACCESS_TOKEN = "YOUR_NETLIFY_PAT" }
+
+[mcp_servers.sequential_thinking]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+
+# Optional: trust specific local projects
+#[projects."/path/to/project"]
+#trust_level = "trusted"
