@@ -1,0 +1,99 @@
+#!/bin/bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: codex-sanity-all [--commit|-c]
+
+Runs diagnostics across ALL changed files in current git repo.
+If all pass, prints a suggested commit. With --commit, stages & commits.
+
+Examples:
+  codex-sanity-all
+  codex-sanity-all --commit
+EOF
+}
+
+AUTO_COMMIT=0
+
+while (( "$#" )); do
+  case "${1:-}" in
+    -h|--help) show_help; exit 0;;
+    -c|--commit) AUTO_COMMIT=1; shift;;
+    --) shift; break;;
+    -*) echo "Unknown option: $1" >&2; exit 2;;
+    *) echo "Unknown arg: $1" >&2; exit 2;;
+  esac
+done
+
+# Ensure git repo
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "Not a git repository." >&2
+  exit 2
+fi
+
+# Collect changed files (M, A, ??, etc.)
+mapfile -t CHANGED < <(git status --porcelain | awk '{print substr($0,4)}' | sed '/^$/d')
+if [ ${#CHANGED[@]} -eq 0 ]; then
+  echo "No changed files detected."
+  exit 0
+fi
+
+echo "Found ${#CHANGED[@]} changed file(s). Running diagnostics..."
+
+FAILED=()
+for f in "${CHANGED[@]}"; do
+  # Build payload and run diagnostics; capture exit code but continue
+  PAYLOAD=$(printf '{"tool_input":{"file_path":"%s"},"cwd":"%s"}' "$f" "$(pwd)")
+  echo "$PAYLOAD" | node "$HOME/.codex/hooks/ide_diagnostics.js" >/dev/null 2>&1 || STATUS=$?
+  STATUS=${STATUS:-0}
+  if [ $STATUS -ne 0 ]; then
+    FAILED+=("$f:$STATUS")
+  fi
+  unset STATUS
+done
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+  echo "Diagnostics reported issues in ${#FAILED[@]} file(s):"
+  for e in "${FAILED[@]}"; do echo "  - $e"; done
+  echo "Fix the reported issues, then re-run."
+  exit 2
+fi
+
+echo "All diagnostics passed."
+
+# Prepare commit suggestion or perform commit
+SUBJECT="chore: diagnostics across ${#CHANGED[@]} files"
+
+if [ "$AUTO_COMMIT" = "1" ]; then
+  # Stage explicitly the changed set
+  for f in "${CHANGED[@]}"; do
+    git add -- "$f"
+  done
+  BODY="- Run ESLint/TS checks and auto-fixes where applicable"
+  # Include up to first 10 files for readability
+  COUNT=${#CHANGED[@]}
+  MAX=10
+  IDX=0
+  LIST=""
+  for f in "${CHANGED[@]}"; do
+    LIST+="- $f
+"
+    IDX=0
+    IDX=$((IDX+1))
+    [ $IDX -ge $MAX ] && break
+  done
+  [ $COUNT -gt $MAX ] && LIST+="- ... and $((COUNT-MAX)) more"
+  git commit -m "$SUBJECT" -m "$BODY" -m "$LIST" && echo "✓ Committed: $SUBJECT"
+else
+  echo
+  echo "Suggested commit:"
+  # Suggest staging commands compactly when many files
+  if [ ${#CHANGED[@]} -gt 10 ]; then
+    echo "  git add -A"
+  else
+    printf "  git add"; for f in "${CHANGED[@]}"; do printf " -- '%s'" "$f"; done; printf "\n"
+  fi
+  echo "  git commit -m $(printf %q "$SUBJECT") -m $(printf %q "- Run ESLint/TS checks and auto-fixes where applicable")"
+fi
+
