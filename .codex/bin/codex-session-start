@@ -1,0 +1,26 @@
+#!/bin/bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: codex-session-start [startup|resume|clear|compact]
+
+Prints useful session/repo context using ~/.codex/hooks/session-start.sh
+Default mode is 'startup'.
+
+Examples:
+  codex-session-start
+  codex-session-start resume
+  codex-session-start clear
+EOF
+}
+
+MODE="${1:-startup}"
+case "$MODE" in
+  -h|--help) show_help; exit 0;;
+  startup|resume|clear|compact) :;;
+  *) echo "Unknown mode: $MODE" >&2; show_help; exit 2;;
+esac
+
+printf '{"source":"%s"}' "$MODE" | bash "$HOME/.codex/hooks/session-start.sh"
+
