@@ -1,0 +1,50 @@
+#!/bin/bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: codex-status [--model NAME] [--style NAME] [--transcript PATH] [--cwd DIR]
+
+Renders a compact status line using ~/.codex/hooks/statusline.sh.
+
+Examples:
+  codex-status
+  codex-status --model Codex --style default
+  codex-status --transcript ~/.claude/transcript.jsonl
+EOF
+}
+
+MODEL="Codex"
+STYLE="default"
+TRANSCRIPT=""
+CWD="$(pwd)"
+
+while (( "$#" )); do
+  case "${1:-}" in
+    -h|--help) show_help; exit 0;;
+    --model) MODEL="${2:-}"; shift 2;;
+    --style) STYLE="${2:-}"; shift 2;;
+    --transcript) TRANSCRIPT="${2:-}"; shift 2;;
+    --cwd) CWD="${2:-}"; shift 2;;
+    --) shift; break;;
+    -*) echo "Unknown option: $1" >&2; exit 2;;
+    *) echo "Unknown arg: $1" >&2; exit 2;;
+  esac
+done
+
+export MODEL STYLE CWD TRANSCRIPT
+
+python3 - <<'PY' | bash "$HOME/.codex/hooks/statusline.sh"
+import json, os
+obj = {
+  'model': {'display_name': os.environ.get('MODEL','Codex')},
+  'workspace': {'current_dir': os.environ.get('CWD','.')},
+  'output_style': {'name': os.environ.get('STYLE','default')},
+  'cost': {'total_api_duration_ms': 0, 'total_cost_usd': 0}
+}
+tr = os.environ.get('TRANSCRIPT','')
+if tr:
+    obj['transcript_path'] = tr
+print(json.dumps(obj))
+PY
+
